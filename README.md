@@ -36,7 +36,7 @@ To build an aggregation keeping the top-k elements of a field, use the following
 }
 ```
 
-For example, to keep the 10 most frequent values of your "ip" field, use:
+For example, to keep the 100 most frequent values of your "ip" field, use:
 
 ```json
 {
