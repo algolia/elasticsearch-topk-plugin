@@ -12,9 +12,6 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
-import org.elasticsearch.search.aggregations.InternalAggregation.CommonFields;
-import org.elasticsearch.search.aggregations.bucket.terms.InternalTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.StringTerms.Bucket;
 
 import com.clearspring.analytics.stream.Counter;
 import com.clearspring.analytics.stream.StreamSummary;
@@ -59,7 +56,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
         List<Counter<String>> counters = this.summary.topK(this.size.intValue());
         for (Counter<String> c : counters) {
             if (c.getItem().equals(term)) {
-                new TopK.Bucket(c.getItem(), c.getCount());
+                new TopK.Bucket(c.getItem(), c.getCount(), null);
             }
         }
         throw new NoSuchElementException("Cannot find term '" + term + "'");
@@ -71,7 +68,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
         if (this.summary != null) {
             List<Counter<String>> counters = this.summary.topK(this.size.intValue());
             for (Counter<String> c : counters) {
-                buckets.add(new TopK.Bucket(c.getItem(), c.getCount()));
+                buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), null));
             }
         }
         return buckets;
@@ -85,9 +82,6 @@ public class InternalTopK extends InternalAggregation implements TopK {
     @Override
     public InternalTopK reduce(ReduceContext reduceContext) {
         List<InternalAggregation> aggregations = reduceContext.aggregations();
-        if (aggregations.size() == 1) {
-            return (InternalTopK) aggregations.get(0);
-        }
         InternalTopK reduced = null;
         for (InternalAggregation aggregation : aggregations) {
             if (reduced == null) {
@@ -105,10 +99,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
                 }
             }
         }
-        if (reduced != null) {
-            return reduced;
-        }
-        return (InternalTopK) aggregations.get(0);
+        return reduced;
     }
 
     @Override
@@ -147,7 +138,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
             builder.startObject();
             builder.field(CommonFields.KEY, ((Bucket) bucket).getKey());
             builder.field(CommonFields.DOC_COUNT, bucket.getDocCount());
-            //FIXME: ((InternalAggregations) bucket.getAggregations()).toXContentInternal(builder, params);
+            ((InternalAggregations) bucket.getAggregations()).toXContentInternal(builder, params);
             builder.endObject();
         }
         builder.endArray();

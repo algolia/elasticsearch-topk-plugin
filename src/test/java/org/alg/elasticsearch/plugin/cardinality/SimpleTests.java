@@ -84,7 +84,7 @@ public class SimpleTests extends Assert {
     }
     
     @Test
-    public void assertTop10OneShard() {
+    public void assertTop10of3OneShard() {
         client.admin().indices().prepareCreate("top10-one-shard").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
         
         client.prepareIndex("top10-one-shard", "type0", "doc0").setSource("field0", "foo").execute().actionGet();
@@ -104,5 +104,53 @@ public class SimpleTests extends Assert {
         assertEquals("bar", buckets.get(1).getKey());
         assertEquals(1, buckets.get(1).getDocCount());
     }
-    
+
+    @Test
+    public void assertTop10of50OneShard() {
+        client.admin().indices().prepareCreate("top10-one-shard2").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
+        
+        for (int i = 0; i < 50; ++i) { // 50 values
+            client.prepareIndex("top10-one-shard2", "type0", "doc" + i).setSource("field0", "foo" + i).execute().actionGet();
+        }
+        client.prepareIndex("top10-one-shard2", "type0", "doc50").setSource("field0", "foo0").setRefresh(true).execute().actionGet(); // foo0 twice
+       
+        SearchResponse searchResponse = client.prepareSearch("top10-one-shard2")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TopKBuilder("uniq0").field("field0").size(10))
+                .execute().actionGet();
+        TopK topk = searchResponse.getAggregations().get("uniq0");
+        assertNotNull(topk);
+        List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
+        assertEquals(10, buckets.size());
+        assertEquals("foo0", buckets.get(0).getKey());
+        assertEquals(2, buckets.get(0).getDocCount());
+        for (int i = 1; i < 10; ++i) {
+            assertEquals("foo" + i, buckets.get(i).getKey());
+            assertEquals(1, buckets.get(i).getDocCount());
+        }
+    }
+
+    @Test
+    public void assertTop10of50TwoShard() {
+        client.admin().indices().prepareCreate("top10-one-shard3").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 2)).execute().actionGet();
+        
+        for (int i = 0; i < 50; ++i) { // 50 values
+            client.prepareIndex("top10-one-shard3", "type0", "doc" + i).setSource("field0", "foo" + i).execute().actionGet();
+        }
+        for (int i = 50; i < 100; ++i) { // 50 same values
+            client.prepareIndex("top10-one-shard3", "type0", "doc" + i).setSource("field0", "foo0").setRefresh(true).execute().actionGet(); // foo0 x 50
+        }
+       
+        SearchResponse searchResponse = client.prepareSearch("top10-one-shard3")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TopKBuilder("uniq0").field("field0").size(10))
+                .execute().actionGet();
+        TopK topk = searchResponse.getAggregations().get("uniq0");
+        assertNotNull(topk);
+        List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
+        assertEquals(10, buckets.size());
+        assertEquals("foo0", buckets.get(0).getKey());
+        assertTrue(buckets.get(0).getDocCount() >= 50); // approx
+    }
+
 }
