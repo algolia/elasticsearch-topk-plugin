@@ -150,7 +150,7 @@ public class SimpleTests extends Assert {
         List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
         assertEquals(10, buckets.size());
         assertEquals("foo0", buckets.get(0).getKey());
-        assertTrue(buckets.get(0).getDocCount() >= 50); // approx
+        assertEquals(51, buckets.get(0).getDocCount());
     }
 
 }
