@@ -1,0 +1,12 @@
+/data
+/work
+/logs
+/.idea
+/target
+.DS_Store
+*.iml
+/.settings
+/.classpath
+/.project
+/bin
+/test-output
