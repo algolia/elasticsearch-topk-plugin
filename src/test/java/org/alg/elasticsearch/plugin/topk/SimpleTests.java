@@ -6,6 +6,7 @@ import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.alg.elasticsearch.search.aggregations.topk.TopK;
 import org.alg.elasticsearch.search.aggregations.topk.TopKBuilder;
@@ -37,7 +38,7 @@ public class SimpleTests extends Assert {
     private Node node2;
 
     private Client client;
-
+    
     @BeforeClass
     public void startNode() {
         ImmutableSettings.Builder finalSettings = settingsBuilder()
@@ -240,6 +241,57 @@ public class SimpleTests extends Assert {
                 break;
             case "max":
                 assertEquals(99.0, ((Max) agg).getValue(), 0.001);
+                break;
+            default:
+                assertTrue(false);
+            } 
+        }
+    }
+    
+    @Test
+    public void assertTop10of50TwoShardNestedAggregationsStress() {
+        client.admin().indices().prepareCreate("topk-6").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 4)).execute().actionGet();
+        
+        final int N = 30000;
+        double sum = 0;
+        int n = 0;
+        int max = Integer.MIN_VALUE;
+        Random r = new Random();
+        for (int i = 0; i < N; ++i) {
+            int v = r.nextInt();
+            if (i % 7 == 0) {
+                sum += v;
+                ++n;
+                if (v > max) {
+                    max = v;
+                }
+            }
+            client.prepareIndex("topk-6", "type0", "doc" + i).setSource("{ \"field0\": \"foo" + (i % 7 == 0 ? "bar" : String.valueOf(i)) + "\", \"field1\":" + v +" }").setRefresh(i == N - 1).execute().actionGet();
+        }
+        try { Thread.sleep(2000); } catch (InterruptedException e) {} // FIXME: wait until all docs are searchable
+        
+        SearchResponse searchResponse = client.prepareSearch("topk-6")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TopKBuilder("topk").field("field0").size(10)
+                        .subAggregation(new AvgBuilder("avg").field("field1"))
+                        .subAggregation(new MaxBuilder("max").field("field1"))
+                )
+                .execute().actionGet();
+        assertEquals(N, searchResponse.getHits().getTotalHits());
+        TopK topk = searchResponse.getAggregations().get("topk");
+        assertNotNull(topk);
+        List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
+        assertEquals(10, buckets.size());
+        assertEquals("foobar", buckets.get(0).getKey());
+        assertEquals(n, buckets.get(0).getDocCount());
+        assertEquals(2, buckets.get(0).getAggregations().asList().size());
+        for (Aggregation agg : buckets.get(0).getAggregations()) {
+            switch (agg.getName()) {
+            case "avg":
+                assertEquals(sum / n, ((Avg) agg).getValue(), 0.01);
+                break;
+            case "max":
+                assertEquals((double) max, ((Max) agg).getValue(), 0.001);
                 break;
             default:
                 assertTrue(false);
