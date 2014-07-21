@@ -3,7 +3,9 @@
 Elasticsearch Top-K Plugin
 ===================================
 
-This plugin extends Elasticsearch providing a fast & memory-efficient way to get the Top-K elements of a field through an aggregation. The field can be either string, numerical or boolean. The plugin registers a new type of aggregation (`topk`).
+This plugin extends Elasticsearch providing a fast & memory-efficient aggregation statistically retrieving the Top-K elements of a field. The field can be either string, numerical or boolean. The plugin registers a new type of aggregation (`topk`).
+
+This plugin is a temporary replacement of [#6697](https://github.com/elasticsearch/elasticsearch/issues/6697).
 
 We _love_ pull-requests!
 
