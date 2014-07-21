@@ -23,11 +23,13 @@ public interface TopK extends MultiBucketsAggregation {
     static class Bucket implements MultiBucketsAggregation.Bucket {
         private final String term;
         private final long count;
-        private final InternalAggregations aggregations;
+        final int bucketOrd;
+        InternalAggregations aggregations;
         
-        public Bucket(String term, long count, InternalAggregations aggregations) {
+        public Bucket(String term, long count, int bucketOrd, InternalAggregations aggregations) {
             this.term = term;
             this.count = count;
+            this.bucketOrd = bucketOrd;
             this.aggregations = aggregations;
         }
         
@@ -51,17 +53,6 @@ public interface TopK extends MultiBucketsAggregation {
             return aggregations;
         }
         
-        Bucket reduce(List<Bucket> buckets, BigArrays bigArrays) {
-            long docCount = 0;
-            List<InternalAggregations> aggregationsList = Lists.newArrayListWithCapacity(buckets.size());
-            for (Bucket bucket : buckets) {
-                docCount += bucket.getDocCount();
-                aggregationsList.add((InternalAggregations) bucket.getAggregations());
-            }
-            final InternalAggregations aggs = InternalAggregations.reduce(aggregationsList, bigArrays);
-            return new Bucket(term, docCount, aggs);
-        }
-
         void toXContent(XContentBuilder builder, Params params) throws IOException {
             builder.startObject();
             builder.field(CommonFields.KEY, term);

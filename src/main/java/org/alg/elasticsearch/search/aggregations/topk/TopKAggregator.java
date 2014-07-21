@@ -1,6 +1,7 @@
 package org.alg.elasticsearch.search.aggregations.topk;
 
 import java.io.IOException;
+import java.util.BitSet;
 
 import org.apache.lucene.index.AtomicReaderContext;
 import org.elasticsearch.common.lease.Releasables;
@@ -9,6 +10,7 @@ import org.elasticsearch.index.fielddata.BytesValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -66,11 +68,18 @@ public class TopKAggregator extends SingleBucketAggregator {
         for (int i = 0; i < valuesCount; i++) {
             summary.offer(values.nextValue().utf8ToString());
         }
+        
+        collectBucketNoCounts(doc, owningBucketOrdinal); // FIXME: we don't know the bucketOrd here
     }
 
     @Override
     public InternalAggregation buildAggregation(long owningBucketOrdinal) {
-        return new InternalTopK(name, size, summaries == null || owningBucketOrdinal >= summaries.size() ? null : (StreamSummary<String>) summaries.get(owningBucketOrdinal));
+        StreamSummary<String> summary = summaries == null || owningBucketOrdinal >= summaries.size() ? null : (StreamSummary<String>) summaries.get(owningBucketOrdinal);
+        InternalTopK topk = new InternalTopK(name, size, summary);
+        for (TopK.Bucket bucket : topk.getBuckets()) {
+            bucket.aggregations = bucketAggregations(bucket.bucketOrd);
+        }
+        return topk;
     }
 
     @Override

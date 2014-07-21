@@ -47,12 +47,13 @@ public class InternalTopK extends InternalAggregation implements TopK {
         super(name);
         this.size = size;
         this.summary = summary;
-
         this.buckets = new ArrayList<>();
+        this.bucketsMap = null;
         if (this.summary != null) {
             List<Counter<String>> counters = this.summary.topK(this.size.intValue());
+            int bucketOrd = 0;
             for (Counter<String> c : counters) {
-                this.buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), null));
+                this.buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), bucketOrd++, null));
             }
         }
     }
@@ -81,20 +82,52 @@ public class InternalTopK extends InternalAggregation implements TopK {
     @Override
     public InternalTopK reduce(ReduceContext reduceContext) {
         List<InternalAggregation> aggregations = reduceContext.aggregations();
-        StreamSummary<String> summary = null;
-        for (InternalAggregation aggregation : aggregations) {
-            if (summary == null) {
-                summary = new StreamSummary<>(((InternalTopK) aggregation).size.intValue());
+        InternalTopK reduced = null;
+        if (aggregations.size() == 1) {
+            reduced = ((InternalTopK) aggregations.get(0));
+            for (TopK.Bucket bucket : reduced.getBuckets()) {
+                ((InternalAggregations) bucket.getAggregations()).reduce(reduceContext.bigArrays());
             }
-            StreamSummary<String> s = ((InternalTopK) aggregation).summary;
-            if (s != null) {
-                for (Counter<String> c : s.topK(this.size.intValue() * aggregations.size())) {
-                    summary.offer(c.getItem(), (int) c.getCount());
+            return reduced;
+        }
+        HashMap<String, List<TopK.Bucket>> termToBucket = new HashMap<>();
+        for (InternalAggregation aggregation : aggregations) {
+            InternalTopK topk = (InternalTopK) aggregation;
+            if (reduced == null) {
+                reduced = topk;
+            } else {
+                StreamSummary<String> s = topk.summary;
+                if (s != null) {
+                    if (reduced.summary == null) {
+                        reduced.summary = s;
+                    } else {
+                        for (TopK.Bucket bucket : topk.getBuckets()) {
+                            reduced.summary.offer(bucket.getKey(), (int) bucket.getDocCount());
+                        }
+                    }
                 }
             }
+            for (TopK.Bucket bucket : topk.getBuckets()) {
+                List<TopK.Bucket> buckets = termToBucket.get(bucket.getKey());
+                if (buckets == null) {
+                    buckets = new ArrayList<>();
+                    termToBucket.put(bucket.getKey(), buckets);
+                }
+                buckets.add(bucket);
+            }
         }
-        InternalTopK first = ((InternalTopK) aggregations.get(0));
-        return new InternalTopK(first.name, first.size, summary);
+        reduced.buckets.clear();
+        reduced.bucketsMap = null;
+        List<Counter<String>> counters = reduced.summary.topK(reduced.size.intValue());
+        int bucketOrd = 0;
+        for (Counter<String> c : counters) {
+            List<InternalAggregations> aggs = new ArrayList<>();
+            for (TopK.Bucket bucket : termToBucket.get(c.getItem())) {
+                aggs.add(bucket.aggregations);
+            }
+            reduced.buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
+        }
+        return reduced;
     }
 
     @Override
@@ -109,12 +142,6 @@ public class InternalTopK extends InternalAggregation implements TopK {
         } catch (ClassNotFoundException e) {
             throw new IOException("Failed to build summary", e);
         }
-        List<TopK.Bucket> buckets = new ArrayList<>(size.intValue());
-        for (Counter<String> c : summary.topK(size.intValue())) {
-            buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), null));
-        }
-        this.buckets = buckets;
-        this.bucketsMap = null;
     }
 
     @Override
@@ -131,11 +158,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
         builder.startObject(name);
         builder.startArray(CommonFields.BUCKETS);
         for (TopK.Bucket bucket : getBuckets()) {
-            builder.startObject();
-            builder.field(CommonFields.KEY, ((Bucket) bucket).getKey());
-            builder.field(CommonFields.DOC_COUNT, bucket.getDocCount());
-            ((InternalAggregations) bucket.getAggregations()).toXContentInternal(builder, params);
-            builder.endObject();
+            bucket.toXContent(builder, params);
         }
         builder.endArray();
         builder.endObject();
