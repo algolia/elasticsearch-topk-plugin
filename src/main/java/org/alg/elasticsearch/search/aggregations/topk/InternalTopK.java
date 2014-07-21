@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 
+import org.alg.elasticsearch.search.aggregations.topk.TopKAggregator.Term;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -36,24 +37,23 @@ public class InternalTopK extends InternalAggregation implements TopK {
         AggregationStreams.registerStream(STREAM, TYPE.stream());
     }
 
-    private StreamSummary<String> summary;
+    private StreamSummary<Term> summary;
     private Number size;
     private List<TopK.Bucket> buckets;
     private HashMap<String, TopK.Bucket> bucketsMap;
 
     InternalTopK() { }  // for serialization
 
-    InternalTopK(String name, Number size, StreamSummary<String> summary) {
+    InternalTopK(String name, Number size, StreamSummary<Term> summary) {
         super(name);
         this.size = size;
         this.summary = summary;
         this.buckets = new ArrayList<>();
         this.bucketsMap = null;
         if (this.summary != null) {
-            List<Counter<String>> counters = this.summary.topK(this.size.intValue());
-            int bucketOrd = 0;
-            for (Counter<String> c : counters) {
-                this.buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), bucketOrd++, null));
+            List<Counter<Term>> counters = this.summary.topK(this.size.intValue());
+            for (Counter<Term> c : counters) {
+                this.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), c.getItem().bucketOrd, null));
             }
         }
     }
@@ -84,6 +84,8 @@ public class InternalTopK extends InternalAggregation implements TopK {
     public InternalTopK reduce(ReduceContext reduceContext) {
         List<InternalAggregation> aggregations = reduceContext.aggregations();
         InternalTopK reduced = null;
+        
+        // single aggregation
         if (aggregations.size() == 1) {
             reduced = ((InternalTopK) aggregations.get(0));
             for (TopK.Bucket bucket : reduced.getBuckets()) {
@@ -91,23 +93,13 @@ public class InternalTopK extends InternalAggregation implements TopK {
             }
             return reduced;
         }
+
+        // reduce all top-k
         HashMap<String, List<TopK.Bucket>> termToBucket = new HashMap<>();
         for (InternalAggregation aggregation : aggregations) {
             InternalTopK topk = (InternalTopK) aggregation;
-            if (reduced == null) {
-                reduced = topk;
-            } else {
-                StreamSummary<String> s = topk.summary;
-                if (s != null) {
-                    if (reduced.summary == null) {
-                        reduced.summary = s;
-                    } else {
-                        for (TopK.Bucket bucket : topk.getBuckets()) {
-                            reduced.summary.offer(bucket.getKey(), (int) bucket.getDocCount());
-                        }
-                    }
-                }
-            }
+
+            // build term->(bucket*) dict
             for (TopK.Bucket bucket : topk.getBuckets()) {
                 List<TopK.Bucket> buckets = termToBucket.get(bucket.getKey());
                 if (buckets == null) {
@@ -116,17 +108,35 @@ public class InternalTopK extends InternalAggregation implements TopK {
                 }
                 buckets.add(bucket);
             }
+
+            // merge top-k terms
+            if (reduced == null) {
+                reduced = topk;
+            } else {
+                StreamSummary<Term> s = topk.summary;
+                if (s != null) {
+                    if (reduced.summary == null) {
+                        reduced.summary = s;
+                    } else {
+                        for (TopK.Bucket bucket : topk.getBuckets()) {
+                            reduced.summary.offer(new Term(bucket.getKey(), bucket.bucketOrd), (int) bucket.getDocCount());
+                        }
+                    }
+                }
+            }
         }
+        
+        // rebuild buckets
         reduced.buckets.clear();
         reduced.bucketsMap = null;
-        List<Counter<String>> counters = reduced.summary.topK(reduced.size.intValue());
+        List<Counter<Term>> counters = reduced.summary.topK(reduced.size.intValue());
         int bucketOrd = 0;
-        for (Counter<String> c : counters) {
+        for (Counter<Term> c : counters) {
             List<InternalAggregations> aggs = new ArrayList<>();
-            for (TopK.Bucket bucket : termToBucket.get(c.getItem())) {
+            for (TopK.Bucket bucket : termToBucket.get(c.getItem().term)) {
                 aggs.add(bucket.aggregations);
             }
-            reduced.buckets.add(new TopK.Bucket(c.getItem(), c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
+            reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
         }
         return reduced;
     }

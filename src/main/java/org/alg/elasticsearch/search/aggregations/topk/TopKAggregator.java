@@ -1,7 +1,8 @@
 package org.alg.elasticsearch.search.aggregations.topk;
 
 import java.io.IOException;
-import java.util.BitSet;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.lucene.index.AtomicReaderContext;
 import org.elasticsearch.common.lease.Releasables;
@@ -10,7 +11,6 @@ import org.elasticsearch.index.fielddata.BytesValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
-import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -18,6 +18,7 @@ import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFacto
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 
 import com.clearspring.analytics.stream.StreamSummary;
+import com.clearspring.analytics.util.Pair;
 
 /**
  *
@@ -27,15 +28,49 @@ public class TopKAggregator extends SingleBucketAggregator {
     private ValuesSource.Bytes valuesSource;
     private BytesValues values;
     
+    static class Term implements Comparable<Term> {
+        Term(String term, int bucketOrd) {
+            this.term = term;
+            this.bucketOrd = bucketOrd;
+        }
+        Term(String term) {
+            this(term, -1);
+        }
+        String term;
+        int bucketOrd;
+        
+        @Override
+        public int compareTo(Term o) {
+            return term.compareTo(o.term);
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof Term) {
+                return ((Term) obj).term.equals(term);
+            }
+            return false;
+        }
+        
+        @Override
+        public int hashCode() {
+            return term.hashCode();
+        }
+    }
+    
     private final Number size;
     private final Number capacity;
-    private ObjectArray<StreamSummary<String>> summaries;
+    private int currentBucketOrd;
+    private final Map<String, Integer> termToBucket;
+    private ObjectArray<StreamSummary<Term>> summaries;
 
     public TopKAggregator(String name, Number size, Number capacity, AggregatorFactories factories, long estimatedBucketsCount, ValuesSource.Bytes valuesSource, AggregationContext aggregationContext, Aggregator parent) {
         super(name, factories, aggregationContext, parent);
         this.size = size;
         this.capacity = capacity;
         this.valuesSource = valuesSource;
+        this.currentBucketOrd = 0;
+        this.termToBucket = new HashMap<>();
         if (valuesSource != null) {
             final long initialSize = estimatedBucketsCount < 2 ? 1 : estimatedBucketsCount;
             this.summaries = bigArrays.newObjectArray(initialSize);
@@ -58,23 +93,47 @@ public class TopKAggregator extends SingleBucketAggregator {
         
         this.summaries = bigArrays.grow(this.summaries, owningBucketOrdinal + 1);
 
-        StreamSummary<String> summary = (StreamSummary<String>) summaries.get(owningBucketOrdinal);
+        StreamSummary<Term> summary = (StreamSummary<Term>) summaries.get(owningBucketOrdinal);
         if (summary == null) {
-            summary = new StreamSummary<String>(capacity.intValue());
+            summary = new StreamSummary<Term>(capacity.intValue());
             summaries.set(owningBucketOrdinal, summary);
         }
 
         final int valuesCount = values.setDocument(doc);
         for (int i = 0; i < valuesCount; i++) {
-            summary.offer(values.nextValue().utf8ToString());
+            // store the term
+            Term t = new Term(values.nextValue().utf8ToString());
+            Pair<Boolean, Term> dropped = summary.offerReturnAll(t, 1);
+            
+            // assign a bucketOrd
+            if (dropped.left) {
+                // new item: assign new bucketOrd
+                if (this.currentBucketOrd < this.capacity.intValue()) {
+                    t.bucketOrd = this.currentBucketOrd++;
+                    termToBucket.put(t.term, t.bucketOrd);
+                }
+            } else {
+                // same item: assign same bucketOrd
+                t.bucketOrd = this.termToBucket.get(t.term);
+            }
+            if (dropped.right != null) {
+                // recycle bucketOrd (yes, we reuse wrongly aggregated values)
+                termToBucket.remove(dropped.right.term);
+                if (t.bucketOrd == -1) {
+                    t.bucketOrd = dropped.right.bucketOrd;
+                    termToBucket.put(t.term, t.bucketOrd);
+                }
+            }
+            
+            // collect sub aggregations
+            assert t.bucketOrd != -1;
+            collectBucket(doc, t.bucketOrd);
         }
-        
-        collectBucketNoCounts(doc, owningBucketOrdinal); // FIXME: we don't know the bucketOrd here
     }
 
     @Override
     public InternalAggregation buildAggregation(long owningBucketOrdinal) {
-        StreamSummary<String> summary = summaries == null || owningBucketOrdinal >= summaries.size() ? null : (StreamSummary<String>) summaries.get(owningBucketOrdinal);
+        StreamSummary<Term> summary = summaries == null || owningBucketOrdinal >= summaries.size() ? null : (StreamSummary<Term>) summaries.get(owningBucketOrdinal);
         InternalTopK topk = new InternalTopK(name, size, summary);
         for (TopK.Bucket bucket : topk.getBuckets()) {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);
