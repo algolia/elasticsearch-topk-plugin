@@ -62,6 +62,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
     @Override
     public TopK.Bucket getBucketByKey(String term) {
         if (bucketsMap == null) {
+            bucketsMap = new HashMap<>();
             for (TopK.Bucket bucket : buckets) {
                 bucketsMap.put(bucket.getKey(), bucket);
             }
