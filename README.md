@@ -70,7 +70,7 @@ For example, to keep the 100 most frequent values of your "ip" field, use:
 
 ### Installation 
 
-    ./plugin --url file:///absolute/path/to/elasticsearch-topk-plugin-0.0.1.zip --install topk-aggregation
+    ./plugin --url file:///absolute/path/to/elasticsearch-topk-plugin-LATEST.zip --install topk-aggregation
 
 ### Uninstallation
 
