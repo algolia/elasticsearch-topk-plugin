@@ -118,6 +118,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
                     if (reduced.summary == null) {
                         reduced.summary = s;
                     } else {
+                        // TODO: we're building the reduced top-k with all other top-k, there's probably room for improvement
                         for (TopK.Bucket bucket : topk.getBuckets()) {
                             reduced.summary.offer(new Term(bucket.getKey(), bucket.bucketOrd), (int) bucket.getDocCount());
                         }

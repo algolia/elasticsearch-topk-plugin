@@ -62,9 +62,16 @@ public class TopKAggregator extends SingleBucketAggregator {
     }
     
     private final Number size;
+
+    // Since the sub-aggregations need to be collected
+    // before the final top-k have been computed we'll store
+    // `capacity` Term in the `StreamSummary` associated to `capacity` `TopK.Bucket`
+    // and hope the data is skewed enough to reassign the bucketOrd between terms
+    // without any major accuracy issue
     private final Number capacity;
     private int currentBucketOrd;
     private final Map<String, Integer> termToBucket;
+
     private ObjectArray<StreamSummary<Term>> summaries;
 
     public TopKAggregator(String name, Number size, Number capacity, AggregatorFactories factories, long estimatedBucketsCount, ValuesSource.Bytes valuesSource, AggregationContext aggregationContext, Aggregator parent) {
