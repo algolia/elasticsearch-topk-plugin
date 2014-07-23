@@ -90,6 +90,46 @@ public class SimpleTests extends Assert {
     }
     
     @Test
+    public void assertTop1NumericalOneShard() {
+        client.admin().indices().prepareCreate("topk-0n").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
+        
+        client.prepareIndex("topk-0n", "type0", "doc0").setSource("field0", 42).execute().actionGet();
+        client.prepareIndex("topk-0n", "type0", "doc1").setSource("field0", 42).execute().actionGet();
+        client.prepareIndex("topk-0n", "type0", "doc2").setSource("field0", 51).setRefresh(true).execute().actionGet();
+       
+        SearchResponse searchResponse = client.prepareSearch("topk-0n")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TopKBuilder("topk").field("field0").size(1))
+                .execute().actionGet();
+        TopK topk = searchResponse.getAggregations().get("topk");
+        assertNotNull(topk);
+        List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
+        assertEquals(1, buckets.size());
+        assertEquals("42", buckets.get(0).getKey());
+        assertEquals(2, buckets.get(0).getDocCount());
+    }
+    
+    @Test
+    public void assertTop1BooleanOneShard() {
+        client.admin().indices().prepareCreate("topk-0b").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
+        
+        client.prepareIndex("topk-0b", "type0", "doc0").setSource("field0", true).execute().actionGet();
+        client.prepareIndex("topk-0b", "type0", "doc1").setSource("field0", true).execute().actionGet();
+        client.prepareIndex("topk-0b", "type0", "doc2").setSource("field0", false).setRefresh(true).execute().actionGet();
+       
+        SearchResponse searchResponse = client.prepareSearch("topk-0b")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TopKBuilder("topk").field("field0").size(1))
+                .execute().actionGet();
+        TopK topk = searchResponse.getAggregations().get("topk");
+        assertNotNull(topk);
+        List<TopK.Bucket> buckets = new ArrayList<>(topk.getBuckets());
+        assertEquals(1, buckets.size());
+        assertEquals("T", buckets.get(0).getKey());
+        assertEquals(2, buckets.get(0).getDocCount());
+    }
+    
+    @Test
     public void assertTop10of3OneShard() {
         client.admin().indices().prepareCreate("topk-1").setSettings(ImmutableSettings.settingsBuilder().put("index.number_of_shards", 1)).execute().actionGet();
         
