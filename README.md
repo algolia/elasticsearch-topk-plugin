@@ -19,11 +19,11 @@ We _love_ pull-requests!
 
 ## Why
 
-The default ```terms``` aggregations implementations use an amount of memory that is linear with the cardinality of the value source they run on. Things get even worse when using sub aggregations, especially the memory-intensive ones such as ```percentiles```, ```cardinality```, ```top_hits``` or ```bucket``` aggregations. This plugin is based on ```Space-Saving``` algorithm, which try to detect the most frequent terms with an arbitrary number of fixed counters. 
+The default ```terms``` aggregations implementations use an amount of memory that is linear with the cardinality of the value source they run on. Things get even worse when using sub aggregations, especially the memory-intensive ones such as ```percentiles```, ```cardinality```, ```top_hits``` or ```bucket``` aggregations. This plugin is based on the ```Space-Saving``` algorithm, which try to detect the most frequent terms with a fixed (configurable) number of counters. 
 
 ## Principle
 
-This plugin uses the ```StreamSummary``` data structure provided by the [Stream-lib](https://github.com/addthis/stream-lib) library to keep the top-k terms of a field. Basically, it retrieves the most frequent terms of a field without loading all of them (and their associated sub aggregations) into RAM. The merge between shards and between indices is supported but might introduce accuracy issues: this is the general trade-off of this algorithm.
+This plugin uses the ```StreamSummary``` data structure provided by the [Stream-lib](https://github.com/addthis/stream-lib) library to compute the top-k values of a field. Basically, it retrieves the most frequent terms of a field without loading all of them (and their associated sub aggregations) into RAM. The merge between shards and between indices is supported but might introduce accuracy issues: this is the general trade-off of this algorithm.
 
 ## Usage
 
