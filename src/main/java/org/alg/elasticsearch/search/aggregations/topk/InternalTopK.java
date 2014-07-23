@@ -129,14 +129,16 @@ public class InternalTopK extends InternalAggregation implements TopK {
         // rebuild buckets
         reduced.buckets.clear();
         reduced.bucketsMap = null;
-        List<Counter<Term>> counters = reduced.summary.topK(reduced.size.intValue());
-        int bucketOrd = 0;
-        for (Counter<Term> c : counters) {
-            List<InternalAggregations> aggs = new ArrayList<>();
-            for (TopK.Bucket bucket : termToBucket.get(c.getItem().term)) {
-                aggs.add(bucket.aggregations);
+        if (reduced.summary != null) {
+            List<Counter<Term>> counters = reduced.summary.topK(reduced.size.intValue());
+            int bucketOrd = 0;
+            for (Counter<Term> c : counters) {
+                List<InternalAggregations> aggs = new ArrayList<>();
+                for (TopK.Bucket bucket : termToBucket.get(c.getItem().term)) {
+                    aggs.add(bucket.aggregations);
+                }
+                reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
             }
-            reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
         }
         return reduced;
     }
