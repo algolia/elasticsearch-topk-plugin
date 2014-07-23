@@ -145,6 +145,8 @@ public class InternalTopK extends InternalAggregation implements TopK {
     public void readFrom(StreamInput in) throws IOException {
         name = in.readString();
         size = in.readInt();
+        int capacity = in.readInt();
+        this.summary = new StreamSummary<>(capacity);
         int n = in.readInt();
         byte[] bytes = new byte[n];
         in.read(bytes);
@@ -153,15 +155,26 @@ public class InternalTopK extends InternalAggregation implements TopK {
         } catch (ClassNotFoundException e) {
             throw new IOException("Failed to build summary", e);
         }
+        n = in.readInt();
+        this.buckets = new ArrayList<>();
+        this.bucketsMap = null;
+        for (int i = 0; i < n; ++i) {
+            buckets.add(Bucket.readFrom(in));
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(this.name);
         out.writeInt(this.size.intValue());
+        out.writeInt(this.summary.getCapacity());
         byte[] bytes = this.summary.toBytes();
         out.writeInt(bytes.length);
         out.write(bytes);
+        out.writeInt(getBuckets().size());
+        for (TopK.Bucket bucket : getBuckets()) {
+            bucket.writeTo(out);
+        }
     }
 
     @Override

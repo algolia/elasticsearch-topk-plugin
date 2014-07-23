@@ -1,6 +1,7 @@
 package org.alg.elasticsearch.search.aggregations.topk;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,7 +29,9 @@ public class TopKAggregator extends SingleBucketAggregator {
     private ValuesSource.Bytes valuesSource;
     private BytesValues values;
     
-    static class Term implements Comparable<Term> {
+    static class Term implements Comparable<Term>, Serializable {
+        private static final long serialVersionUID = 9135396685987711497L;
+
         Term(String term, int bucketOrd) {
             this.term = term;
             this.bucketOrd = bucketOrd;

@@ -2,13 +2,12 @@ package org.alg.elasticsearch.search.aggregations.topk;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
 
 import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.collect.Lists;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.text.BytesText;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.xcontent.ToXContent.Params;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.Aggregations;
@@ -59,6 +58,25 @@ public interface TopK extends MultiBucketsAggregation {
             builder.field(CommonFields.DOC_COUNT, count);
             aggregations.toXContentInternal(builder, params);
             builder.endObject();
+        }
+        
+        void writeTo(StreamOutput out) throws IOException {
+            out.writeString(term);
+            out.writeLong(count);
+            out.writeInt(bucketOrd);
+            if (aggregations != null) {
+                out.writeBoolean(true);
+                aggregations.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
+        
+        static TopK.Bucket readFrom(StreamInput in) throws IOException {
+            String term = in.readString();
+            long count = in.readLong();
+            int bucketOrd = in.readInt();
+            return new TopK.Bucket(term, count, bucketOrd, InternalAggregations.readOptionalAggregations(in));
         }
     }
     
