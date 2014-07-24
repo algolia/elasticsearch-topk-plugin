@@ -3,6 +3,8 @@ package org.alg.elasticsearch.search.aggregations.topk;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
@@ -55,7 +57,23 @@ public class InternalTopK extends InternalAggregation implements TopK {
             for (Counter<Term> c : counters) {
                 this.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), c.getItem().bucketOrd, null));
             }
+            this.sortBuckets();
         }
+    }
+    
+    private void sortBuckets() {
+        Collections.sort(this.buckets, new Comparator<TopK.Bucket>() {
+            @Override
+            public int compare(Bucket o1, Bucket o2) {
+                if (o1.getDocCount() > o2.getDocCount()) {
+                    return -1;
+                } else if (o1.getDocCount() < o2.getDocCount()) {
+                    return 1;
+                } else {
+                    return o1.getKey().compareTo(o2.getKey());
+                }
+            }
+        });
     }
     
     @SuppressWarnings("unchecked")
@@ -140,6 +158,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
                 }
                 reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
             }
+            reduced.sortBuckets();
         }
         return reduced;
     }
@@ -165,8 +184,9 @@ public class InternalTopK extends InternalAggregation implements TopK {
         this.buckets = new ArrayList<>();
         this.bucketsMap = null;
         for (int i = 0; i < n; ++i) {
-            buckets.add(Bucket.readFrom(in));
+            this.buckets.add(Bucket.readFrom(in));
         }
+        // buckets are alreaduy sorted here
     }
 
     @Override
