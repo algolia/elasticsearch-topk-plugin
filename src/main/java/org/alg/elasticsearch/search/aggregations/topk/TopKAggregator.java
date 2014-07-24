@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Stack;
 
 import org.apache.lucene.index.AtomicReaderContext;
 import org.elasticsearch.common.lease.Releasables;
@@ -69,21 +70,21 @@ public class TopKAggregator extends SingleBucketAggregator {
     // and hope the data is skewed enough to reassign the bucketOrd between terms
     // without any major accuracy issue
     private final Number capacity;
-    private int currentBucketOrd;
-    private final Map<String, Integer> termToBucket;
 
+    private ObjectArray<Stack<Integer>> bucketOrds;
     private ObjectArray<StreamSummary<Term>> summaries;
+    private ObjectArray<Map<String, Integer>> termToBucket;
 
     public TopKAggregator(String name, Number size, Number capacity, AggregatorFactories factories, long estimatedBucketsCount, ValuesSource.Bytes valuesSource, AggregationContext aggregationContext, Aggregator parent) {
         super(name, factories, aggregationContext, parent);
         this.size = size;
         this.capacity = capacity;
         this.valuesSource = valuesSource;
-        this.currentBucketOrd = 0;
-        this.termToBucket = new HashMap<>();
         if (valuesSource != null) {
             final long initialSize = estimatedBucketsCount < 2 ? 1 : estimatedBucketsCount;
             this.summaries = bigArrays.newObjectArray(initialSize);
+            this.bucketOrds = bigArrays.newObjectArray(initialSize);
+            this.termToBucket = bigArrays.newObjectArray(initialSize);
         }
     }
     
@@ -102,11 +103,26 @@ public class TopKAggregator extends SingleBucketAggregator {
         assert this.valuesSource != null : "should collect first";
         
         this.summaries = bigArrays.grow(this.summaries, owningBucketOrdinal + 1);
+        this.bucketOrds = bigArrays.grow(this.bucketOrds, owningBucketOrdinal + 1);
+        this.termToBucket = bigArrays.grow(this.termToBucket, owningBucketOrdinal + 1);
 
-        StreamSummary<Term> summary = (StreamSummary<Term>) summaries.get(owningBucketOrdinal);
+        StreamSummary<Term> summary = (StreamSummary<Term>) this.summaries.get(owningBucketOrdinal);
         if (summary == null) {
             summary = new StreamSummary<Term>(capacity.intValue());
-            summaries.set(owningBucketOrdinal, summary);
+            this.summaries.set(owningBucketOrdinal, summary);
+        }
+        Stack<Integer> bucketOrds = (Stack<Integer>) this.bucketOrds.get(owningBucketOrdinal);
+        if (bucketOrds == null) {
+            bucketOrds = new Stack<>();
+            for (int i = 0; i < capacity.intValue(); ++i) {
+                bucketOrds.push(i);
+            }
+            this.bucketOrds.set(owningBucketOrdinal, bucketOrds);
+        }
+        Map<String, Integer> termToBucket = (Map<String, Integer>) this.termToBucket.get(owningBucketOrdinal);
+        if (termToBucket == null) {
+            termToBucket = new HashMap<>();
+            this.termToBucket.set(owningBucketOrdinal, termToBucket);
         }
 
         final int valuesCount = values.setDocument(doc);
@@ -115,23 +131,25 @@ public class TopKAggregator extends SingleBucketAggregator {
             Term t = new Term(values.nextValue().utf8ToString());
             Pair<Boolean, Term> dropped = summary.offerReturnAll(t, 1);
             
-            // assign a bucketOrd
-            if (dropped.left) {
-                // new item: assign new bucketOrd
-                if (this.currentBucketOrd < this.capacity.intValue()) {
-                    t.bucketOrd = this.currentBucketOrd++;
+            if (dropped.right != null) { // one item has been removed from summary
+                // XXX: recycle bucketOrd (yes, we reuse wrongly aggregated values)
+                termToBucket.remove(dropped.right.term);
+                if (dropped.left) { // new item
+                    t.bucketOrd = dropped.right.bucketOrd; // recycle
                     termToBucket.put(t.term, t.bucketOrd);
+                } else { // existing item
+                    bucketOrds.push(dropped.right.bucketOrd); // recycle
+                    assert termToBucket.containsKey(t.term);
+                    t.bucketOrd = termToBucket.get(t.term);
                 }
             } else {
-                // same item: assign same bucketOrd
-                t.bucketOrd = this.termToBucket.get(t.term);
-            }
-            if (dropped.right != null) {
-                // recycle bucketOrd (yes, we reuse wrongly aggregated values)
-                termToBucket.remove(dropped.right.term);
-                if (t.bucketOrd == -1) {
-                    t.bucketOrd = dropped.right.bucketOrd;
+                // assign a bucketOrd
+                if (dropped.left) { // new item
+                    assert this.bucketOrds.size() > 0;
+                    t.bucketOrd = bucketOrds.pop();
                     termToBucket.put(t.term, t.bucketOrd);
+                } else { // existing item
+                    t.bucketOrd = termToBucket.get(t.term);
                 }
             }
             
@@ -160,6 +178,12 @@ public class TopKAggregator extends SingleBucketAggregator {
     public void doClose() {
         if (this.summaries != null) {
             Releasables.close(this.summaries);
+        }
+        if (this.bucketOrds != null) {
+            Releasables.close(this.bucketOrds);
+        }
+        if (this.termToBucket != null) {
+            Releasables.close(this.termToBucket);
         }
     }
 
