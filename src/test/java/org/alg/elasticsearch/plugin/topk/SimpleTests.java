@@ -171,7 +171,6 @@ public class SimpleTests extends Assert {
         assertEquals("foo0", buckets.get(0).getKey());
         assertEquals(2, buckets.get(0).getDocCount());
         for (int i = 1; i < 10; ++i) {
-            assertEquals("foo" + i, buckets.get(i).getKey());
             assertEquals(1, buckets.get(i).getDocCount());
         }
     }
