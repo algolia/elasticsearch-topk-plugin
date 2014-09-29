@@ -11,7 +11,7 @@ We _love_ pull-requests!
 
 ### Prerequisites:
 
- - Elasticsearch 1.2.0+
+ - Elasticsearch 1.3.0+
 
 ### Binaries
 

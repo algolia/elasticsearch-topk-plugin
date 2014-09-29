@@ -103,15 +103,6 @@ public class InternalTopK extends InternalAggregation implements TopK {
         List<InternalAggregation> aggregations = reduceContext.aggregations();
         InternalTopK reduced = null;
         
-        // single aggregation
-        if (aggregations.size() == 1) {
-            reduced = ((InternalTopK) aggregations.get(0));
-            for (TopK.Bucket bucket : reduced.getBuckets()) {
-                ((InternalAggregations) bucket.getAggregations()).reduce(reduceContext.bigArrays());
-            }
-            return reduced;
-        }
-
         // reduce all top-k
         HashMap<String, List<TopK.Bucket>> termToBucket = new HashMap<>();
         for (InternalAggregation aggregation : aggregations) {
