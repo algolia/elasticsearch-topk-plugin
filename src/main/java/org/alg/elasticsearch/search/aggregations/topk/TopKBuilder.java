@@ -9,6 +9,7 @@ public class TopKBuilder extends AggregationBuilder<TopKBuilder> {
     
     private String field;
     private Number size;
+    private Number capacity;
 
     public TopKBuilder(String name) {
         super(name, InternalTopK.TYPE.name());
@@ -24,6 +25,11 @@ public class TopKBuilder extends AggregationBuilder<TopKBuilder> {
         return this;
     }
 
+    public TopKBuilder capacity(Number capacity) {
+        this.capacity = capacity;
+        return this;
+    }
+
     @Override
     protected XContentBuilder internalXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
@@ -32,6 +38,9 @@ public class TopKBuilder extends AggregationBuilder<TopKBuilder> {
         }
         if (size != null) {
             builder.field("size", size);
+        }
+        if (capacity != null) {
+            builder.field("capacity", capacity);
         }
         return builder.endObject();
     }
