@@ -9,7 +9,7 @@ import java.util.Stack;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.common.util.ObjectArray;
-import org.elasticsearch.index.fielddata.BytesValues;
+import org.elasticsearch.index.fielddata.SortedBinaryDocValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
@@ -28,7 +28,7 @@ import com.clearspring.analytics.util.Pair;
 public class TopKAggregator extends SingleBucketAggregator {
     
     private ValuesSource.Bytes valuesSource;
-    private BytesValues values;
+    private SortedBinaryDocValues values;
     
     static class Term implements Comparable<Term>, Serializable {
         private static final long serialVersionUID = 9135396685987711497L;
@@ -124,11 +124,11 @@ public class TopKAggregator extends SingleBucketAggregator {
             termToBucket = new HashMap<>();
             this.termToBucket.set(owningBucketOrdinal, termToBucket);
         }
-
-        final int valuesCount = values.setDocument(doc);
+        values.setDocument(doc);
+        final int valuesCount = values.count();
         for (int i = 0; i < valuesCount; i++) {
             // store the term
-            Term t = new Term(values.nextValue().utf8ToString());
+            Term t = new Term(values.valueAt(i).utf8ToString());
             Pair<Boolean, Term> dropped = summary.offerReturnAll(t, 1);
             
             if (dropped.right != null) { // one item has been removed from summary

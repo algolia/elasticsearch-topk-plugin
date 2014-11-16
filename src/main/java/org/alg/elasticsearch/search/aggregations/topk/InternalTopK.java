@@ -147,7 +147,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
                 for (TopK.Bucket bucket : termToBucket.get(c.getItem().term)) {
                     aggs.add(bucket.aggregations);
                 }
-                reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext.bigArrays())));
+                reduced.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), bucketOrd++, InternalAggregations.reduce(aggs, reduceContext)));
             }
             reduced.sortBuckets();
         }
@@ -198,7 +198,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+    public XContentBuilder doXContentBody(XContentBuilder builder, Params params) throws IOException {
         builder.startObject(name);
         builder.startArray(CommonFields.BUCKETS);
         for (TopK.Bucket bucket : getBuckets()) {

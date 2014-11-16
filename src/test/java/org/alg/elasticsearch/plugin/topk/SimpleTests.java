@@ -1,9 +1,11 @@
 package org.alg.elasticsearch.plugin.topk;
 
 import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -11,14 +13,17 @@ import java.util.Random;
 import org.alg.elasticsearch.search.aggregations.topk.TopK;
 import org.alg.elasticsearch.search.aggregations.topk.TopKBuilder;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.ESLoggerFactory;
 import org.elasticsearch.common.network.NetworkUtils;
 import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.search.aggregations.Aggregation;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.search.aggregations.metrics.avg.Avg;
 import org.elasticsearch.search.aggregations.metrics.avg.AvgBuilder;
 import org.elasticsearch.search.aggregations.metrics.max.Max;
@@ -45,7 +50,8 @@ public class SimpleTests extends Assert {
                 .put("cluster.name", CLUSTER)
                 .put("discovery.zen.ping.multicast.enabled", false)
                 .put("node.local", true)
-                .put("gateway.type", "none");
+                .put("gateway.type", "none")
+        		.put("cluster.routing.allocation.disk.threshold_enabled", false);
         node = nodeBuilder().settings(finalSettings.put("node.name", "node1").build()).build().start();
         node2 = nodeBuilder().settings(finalSettings.put("node.name", "node2").build()).build().start();
 
@@ -87,6 +93,284 @@ public class SimpleTests extends Assert {
         assertEquals(1, buckets.size());
         assertEquals("foo", buckets.get(0).getKey());
         assertEquals(2, buckets.get(0).getDocCount());
+    }
+    
+	public String getMapping() {
+		try {
+			XContentBuilder mapping = jsonBuilder();
+			mapping.startObject()
+				.field("logs")
+					.startObject()
+						.field("dynamic_templates")
+							.startArray()
+								.startObject()
+									.field("string_fields")
+										.startObject()
+											.field("mapping")
+												.startObject()
+													.field("type", "multi_field")
+													.field("fields")
+														.startObject()
+															.field("raw")
+																.startObject()
+																	.field("index", "not_analyzed")
+																	.field("ignore_above", 256)
+																	.field("type", "string")
+																.endObject()
+															.field("{name}")
+																.startObject()
+																	.field("index", "not_analyzed")
+																	.field("omit_norms", true)
+																	.field("type", "string")
+																.endObject()
+														.endObject()
+												.endObject()
+											.field("match", "*")
+											.field("match_mapping_type", "string")
+										.endObject()
+								.endObject()
+							.endArray()
+						.field("_all")
+							.startObject()
+								.field("enabled", false)
+							.endObject()
+						.field("_timestamp")
+							.startObject()
+								.field("enabled", true)
+								.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+								.field("format", "YYYY-MM-dd HH:mm:ss")
+							.endObject()
+						.field("_ttl")
+							.startObject()
+								.field("enabled", true)
+								.field("default", 86400000)
+							.endObject()
+						.field("_source")
+							.startObject()
+								.field("enabled", false)
+							.endObject()
+						.field("properties")
+							.startObject()
+								.field("action")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("appID")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("appIDIndex")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("hour")
+									.startObject()
+										.field("type", "integer")
+									.endObject()
+								.field("index")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("ip")
+									.startObject()
+										.field("type", "ip")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("country")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("nbChar")
+									.startObject()
+										.field("type", "long")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("nbExactMatch")
+									.startObject()
+										.field("type", "long")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("nbHits")
+									.startObject()
+										.field("type", "long")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("nbWord")
+									.startObject()
+										.field("type", "long")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("query")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+											.field("format", "doc_values")
+												.field("loading", "eager_global_ordinals")
+											.endObject()
+									.endObject()
+								.field("referer")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("refined_query")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+											.field("format", "doc_values")
+												.field("loading", "eager_global_ordinals")
+											.endObject()
+									.endObject()
+								.field("refinements")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+												.field("loading", "eager_global_ordinals")
+											.endObject()
+									.endObject()
+								.field("refinements.raw")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+												.field("loading", "eager_global_ordinals")
+											.endObject()
+									.endObject()
+								.field("tags")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("timeMS")
+									.startObject()
+										.field("type", "long")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+								.field("timeout")
+									.startObject()
+										.field("type", "boolean")
+									.endObject()
+								.field("userAgent")
+									.startObject()
+										.field("type", "string")
+										.field("index", "not_analyzed")
+										.field("doc_values", true)
+										.field("fielddata")
+											.startObject()
+												.field("format", "doc_values")
+											.endObject()
+									.endObject()
+							.endObject()
+					.endObject()
+			.endObject();
+			return mapping.string();
+		} catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+    
+    @Test
+    public void docValuesTest() {
+        client.admin().indices().create(new CreateIndexRequest("topk-42").mapping("logs", getMapping()).settings(ImmutableSettings.builder().put("index.number_of_shards", 1).put("index.number_of_replicas", 0).put("index.store.throttle.type", "none"))).actionGet().isAcknowledged();
+        final int N = 100000;
+        for (int i = 0; i <= N; ++i) {
+            client.prepareIndex("topk-42", "logs", "doc" + i).setSource("refinements", "foo" + i).setRefresh(i == N).execute().actionGet();
+        }
+        System.out.println("========================= INDEXING DONE");
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {}
+        System.out.println("========================= SEARCH");
+        SearchResponse searchResponse = client.prepareSearch("topk-42")
+                .setQuery(matchAllQuery())
+                .addAggregation(new TermsBuilder("terms").field("refinements").size(1))
+                .execute().actionGet();
+        TopK topk = searchResponse.getAggregations().get("term");
+        assertNotNull(topk);
+        System.gc();
+        while (true);
     }
     
     @Test
