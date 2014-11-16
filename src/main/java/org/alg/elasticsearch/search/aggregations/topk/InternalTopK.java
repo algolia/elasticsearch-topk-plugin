@@ -199,13 +199,11 @@ public class InternalTopK extends InternalAggregation implements TopK {
 
     @Override
     public XContentBuilder doXContentBody(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
         builder.startArray(CommonFields.BUCKETS);
         for (TopK.Bucket bucket : getBuckets()) {
             bucket.toXContent(builder, params);
         }
         builder.endArray();
-        builder.endObject();
         return builder;
     }
 
