@@ -106,12 +106,12 @@ public class TopKAggregator extends SingleBucketAggregator {
         this.bucketOrds = bigArrays.grow(this.bucketOrds, owningBucketOrdinal + 1);
         this.termToBucket = bigArrays.grow(this.termToBucket, owningBucketOrdinal + 1);
 
-        StreamSummary<Term> summary = (StreamSummary<Term>) this.summaries.get(owningBucketOrdinal);
+        StreamSummary<Term> summary = this.summaries.get(owningBucketOrdinal);
         if (summary == null) {
-            summary = new StreamSummary<Term>(capacity.intValue());
+            summary = new StreamSummary<>(capacity.intValue());
             this.summaries.set(owningBucketOrdinal, summary);
         }
-        Stack<Integer> bucketOrds = (Stack<Integer>) this.bucketOrds.get(owningBucketOrdinal);
+        Stack<Integer> bucketOrds = this.bucketOrds.get(owningBucketOrdinal);
         if (bucketOrds == null) {
             bucketOrds = new Stack<>();
             for (int i = 0; i < capacity.intValue(); ++i) {
@@ -119,7 +119,7 @@ public class TopKAggregator extends SingleBucketAggregator {
             }
             this.bucketOrds.set(owningBucketOrdinal, bucketOrds);
         }
-        Map<String, Integer> termToBucket = (Map<String, Integer>) this.termToBucket.get(owningBucketOrdinal);
+        Map<String, Integer> termToBucket = this.termToBucket.get(owningBucketOrdinal);
         if (termToBucket == null) {
             termToBucket = new HashMap<>();
             this.termToBucket.set(owningBucketOrdinal, termToBucket);
@@ -161,7 +161,7 @@ public class TopKAggregator extends SingleBucketAggregator {
 
     @Override
     public InternalAggregation buildAggregation(long owningBucketOrdinal) {
-        StreamSummary<Term> summary = summaries == null || owningBucketOrdinal >= summaries.size() ? null : (StreamSummary<Term>) summaries.get(owningBucketOrdinal);
+        StreamSummary<Term> summary = summaries == null || owningBucketOrdinal >= summaries.size() ? null : summaries.get(owningBucketOrdinal);
         InternalTopK topk = new InternalTopK(name, size, summary);
         for (TopK.Bucket bucket : topk.getBuckets()) {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);

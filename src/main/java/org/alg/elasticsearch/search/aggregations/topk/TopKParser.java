@@ -25,7 +25,7 @@ public class TopKParser implements Aggregator.Parser {
     @Override
     public AggregatorFactory parse(String aggregationName, XContentParser parser, SearchContext context) throws IOException {
 
-        ValuesSourceConfig<ValuesSource.Bytes> config = new ValuesSourceConfig<ValuesSource.Bytes>(ValuesSource.Bytes.class);
+        ValuesSourceConfig<ValuesSource.Bytes> config = new ValuesSourceConfig<>(ValuesSource.Bytes.class);
         
         String field = null;
         Number size = null;
