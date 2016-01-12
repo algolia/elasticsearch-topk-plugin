@@ -53,7 +53,7 @@ public class InternalTopK extends InternalAggregation implements TopK {
         this.buckets = new ArrayList<>();
         this.bucketsMap = null;
         if (this.summary != null) {
-            List<Counter<Term>> counters = this.summary.topK(this.size.intValue());
+            List<Counter<Term>> counters = this.summary.topK(this.summary.size());
             for (Counter<Term> c : counters) {
                 this.buckets.add(new TopK.Bucket(c.getItem().term, c.getCount(), c.getItem().bucketOrd, null));
             }
