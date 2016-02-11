@@ -6,7 +6,7 @@
 
     <groupId>org.alg.elasticsearch</groupId>
     <artifactId>elasticsearch-topk-plugin</artifactId>
-    <version>0.0.9</version>
+    <version>0.0.10</version>
 
     <packaging>jar</packaging>
 
@@ -32,7 +32,7 @@
     <properties>
         <github.global.server>github</github.global.server>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <elasticsearch.version>1.7.1</elasticsearch.version>
+        <elasticsearch.version>1.7.5</elasticsearch.version>
     </properties>
 
     <dependencies>
